@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import pandas as pd
+import streamlit as st
+from core.interfaces import PreprocessingStep
 
 
 class DuplicateHandlingStrategy(ABC):
@@ -68,5 +70,67 @@ if __name__ == "__main__":
     
     handler = DuplicateHandler(DropAllDuplicatesStrategy())
     df_cleaned = handler.handle_duplicates(df)
+    handler = DuplicateHandler(DropAllDuplicatesStrategy())
+    df_cleaned = handler.handle_duplicates(df)
     print(f"After removing duplicates: {df_cleaned.shape}")
+
+class DuplicateHandlingStep(PreprocessingStep):
+    @property
+    def name(self) -> str:
+        return "Duplicate Rows Handling"
+
+    @property
+    def description(self) -> str:
+        return "Identify and remove duplicate rows from the dataset."
+
+    def render_ui(self, df: pd.DataFrame) -> dict:
+        st.subheader("Duplicate Rows Handling")
+        
+        duplicate_handler = DuplicateHandler(DropAllDuplicatesStrategy())
+        duplicate_count = duplicate_handler.count_duplicates(df)
+        
+        if duplicate_count == 0:
+            st.success("✅ No duplicate rows found in the dataset!")
+            return None
+            
+        st.write(f"**Number of duplicate rows:** {duplicate_count}")
+        
+        duplicate_method = st.radio(
+            "Select Handling Method",
+            ["Remove All Duplicates", "Keep First", "Keep Last"],
+            horizontal=True,
+            key="dup_method"
+        )
+        
+        subset_cols = st.multiselect(
+            "Select columns to check for duplicates (leave empty for all columns)",
+            df.columns.tolist(),
+            key="dup_subset"
+        )
+        
+        params = {
+            "method": duplicate_method,
+            "subset": subset_cols if subset_cols else None
+        }
+        
+        return params
+
+    def execute(self, df: pd.DataFrame, params: dict) -> pd.DataFrame:
+        if params is None:
+            return df
+            
+        method = params.get("method")
+        subset = params.get("subset")
+        
+        duplicate_handler = DuplicateHandler(DropAllDuplicatesStrategy())
+        
+        if method == "Remove All Duplicates":
+            strategy = DropAllDuplicatesStrategy()
+        elif method == "Keep First":
+            strategy = KeepFirstDuplicateStrategy(subset=subset)
+        else:
+            strategy = KeepLastDuplicateStrategy(subset=subset)
+        
+        duplicate_handler.set_strategy(strategy)
+        return duplicate_handler.handle_duplicates(df)
 
